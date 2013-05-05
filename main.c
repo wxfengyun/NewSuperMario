@@ -7,6 +7,10 @@
 #define HEIGHT 480
 #define JUMPIT 1600
 
+// a little bounding box quickie
+#define check_collision(x1,y1,w1,h1,x2,y2,w2,h2) (!( ((x1)>=(x2)+(w2)) || ((x2)>=(x1)+(w1)) || \
+                                                        ((y1)>=(y2)+(h2)) || ((y2)>=(y1)+(h1)) ))
+
 //define the sprite structure
 typedef struct SPRITE
 {
@@ -26,13 +30,15 @@ BITMAP *enemy_image[2];
 BITMAP *turtle_image[2];
 
 SPRITE *player;
-SPRITE *enemy; 
+SPRITE *enemy[10]; 
 SPRITE *turtle;
 
 BITMAP *buffer;
 BITMAP *temp;
 BITMAP *animTemp;
 BITMAP *back;
+
+int jump = JUMPIT;
 
 //tile grabber
 BITMAP *grabframe(BITMAP *source,
@@ -58,12 +64,121 @@ int collided(int x, int y)
     return blockdata->tl;
 }
 
+void MoveEnemy()
+{
+    int i=0;
+    
+    for(i=0; i<10; i++)
+    {
+        if(collided(enemy[i]->x, enemy[i]->y+enemy[i]->height/2) || collided(enemy[i]->x+enemy[i]->width, enemy[i]->y+enemy[i]->height/2))
+        {
+            enemy[i]->dir = -enemy[i]->dir;
+        }
+        
+        if(!collided(enemy[i]->x, enemy[i]->y+enemy[i]->height) || !collided(enemy[i]->x+enemy[i]->width, enemy[i]->y+enemy[i]->height))
+        {
+            enemy[i]->dir = -enemy[i]->dir;
+        }
+        
+        enemy[i]->x += enemy[i]->dir*2;
+        
+        if(enemy[i]->x < 0)
+        {
+            enemy[i]->x = 0;
+            enemy[i]->dir = -enemy[i]->dir;
+        }
+        
+        if(enemy[i]->x > (mapwidth*mapblockwidth))
+        {
+            enemy[i]->x = mapwidth*mapblockwidth;
+            enemy[i]->dir = -enemy[i]->dir;
+        }
+        
+        //first check if player jumped on the enemy
+        if(check_collision(player->x, player->y+player->width-5, player->width, 5, \
+                enemy[i]->x, enemy[i]->y, enemy[i]->width, 5))
+        {
+            enemy[i]->alive = FALSE;
+            enemy[i]->x = 0;
+            enemy[i]->y = 0;
+        }
+        else if(check_collision(player->x, player->y, player->width, player->width, \
+                enemy[i]->x, enemy[i]->y, enemy[i]->width, enemy[i]->height))
+        {//check if player touch the enemy
+            player->x = 220;
+        }
+    }
+    
+}
+
+void InitializeEnemy()
+{
+    int n=0;
+    
+    //intialize the mash enemy
+    for(n=0; n<6; n++)
+    {
+        enemy[n] = malloc(sizeof(SPRITE));
+        enemy[n]->curframe = 0;
+        enemy[n]->framecount = 0;
+        enemy[n]->framedelay = 10;
+        enemy[n]->maxframe = 1;
+        enemy[n]->dir = -1;
+        enemy[n]->width = enemy_image[0]->w;
+        enemy[n]->height = enemy_image[0]->h;  
+    }
+    
+    //initialize the mash enemys' position
+    enemy[0]->x = 800;
+    enemy[0]->y = 418;
+    
+    enemy[1]->x = 800;
+    enemy[1]->y = 195;
+    
+    enemy[2]->x = 2500;
+    enemy[2]->y = 418;
+    
+    enemy[3]->x = 3425;
+    enemy[3]->y = 290;
+    
+    enemy[4]->x = 4540;
+    enemy[4]->y = 418;
+    
+    enemy[5]->x = 6800;
+    enemy[5]->y = 418;
+    
+    //initialize the turtle enemy
+    for(n=6; n<10; n++)
+    {
+        enemy[n] = malloc(sizeof(SPRITE));
+        enemy[n]->curframe = 0;
+        enemy[n]->framecount = 0;
+        enemy[n]->framedelay = 10;
+        enemy[n]->maxframe = 1;
+        enemy[n]->dir = -1;
+        enemy[n]->width = turtle_image[0]->w;
+        enemy[n]->height = turtle_image[0]->h;
+    }
+    
+    //nitialize the turtles' position
+    enemy[6]->x = 950;
+    enemy[6]->y = 410;
+    
+    enemy[7]->x = 1800;
+    enemy[7]->y = 120;
+    
+    enemy[8]->x = 4600;
+    enemy[8]->y = 410;
+    
+    enemy[8]->x = 7000;
+    enemy[8]->y = 410;
+}
+
 int main(void)
 {
     int mapxoff,mapyoff;
     int oldpy,oldpx;
     int facing = 0;
-    int jump = JUMPIT;
     int n;
     int tempX, tempY;
     int touchBrick=0;
@@ -131,16 +246,10 @@ int main(void)
     player->width = player_image[0]->w;
     player->height = player_image[0]->h;
     
-    enemy = malloc(sizeof(SPRITE));
-    enemy->x = 300;
-    enemy->y = 200;
-    enemy->curframe = 0;
-    enemy->framecount = 0;
-    enemy->framedelay = 10;
-    enemy->maxframe = 1;
-    enemy->width = enemy_image[0]->w;
-    enemy->height = enemy_image[0]->h;
     
+    InitializeEnemy();
+  
+  
     //load the map
     MapLoad("platform.fmp");
     
@@ -160,8 +269,7 @@ int main(void)
         oldpy = player->y;
         oldpx = player->x;
         
-        
-        
+               
         if(key[KEY_RIGHT])
         {
             facing = 1;
@@ -172,6 +280,7 @@ int main(void)
                 if(++player->curframe > player->maxframe)
                     player->curframe = 1;
             }
+            
         }
         else if(key[KEY_LEFT])
         {
@@ -309,6 +418,9 @@ int main(void)
         if(mapyoff > (mapheight * mapblockheight - HEIGHT))
             mapyoff = mapheight * mapblockheight - HEIGHT;
             
+        //move enemy
+        MoveEnemy();
+            
         
         //draw the background tiles
         MapDrawBG(buffer,mapxoff, mapyoff, mapxoff,mapyoff, WIDTH-1, HEIGHT-1);
@@ -324,15 +436,31 @@ int main(void)
             draw_sprite(buffer,player_image[player->curframe], player->x, player->y);
         else
             draw_sprite_h_flip(buffer,player_image[player->curframe], player->x, player->y);
-           
-        if(++enemy->framecount > enemy->framedelay)
+        
+        for(n=0; n<10; n++)
         {
-            if(++enemy->curframe > enemy->maxframe)
-                enemy->curframe = 0;
-            
-            enemy->framecount = 0;
+            if(enemy[n]->alive)  
+            { 
+                if(++enemy[n]->framecount > enemy[n]->framedelay)
+                {
+                    if(++enemy[n]->curframe > enemy[n]->maxframe)
+                    enemy[n]->curframe = 0;
+                
+                    enemy[n]->framecount = 0;
+                }
+                
+                if(n<6)
+                    draw_sprite(buffer, enemy_image[enemy[n]->curframe], enemy[n]->x, enemy[n]->y);
+                else
+                {
+                    if(enemy[n]->dir > 0)
+                        draw_sprite(buffer, turtle_image[enemy[n]->curframe], enemy[n]->x, enemy[n]->y);
+                    else
+                        draw_sprite_h_flip(buffer, turtle_image[enemy[n]->curframe], enemy[n]->x, enemy[n]->y);
+                }
+                    
+            }
         }
-        draw_sprite(buffer, enemy_image[enemy->curframe], enemy->x, enemy->y);
         
         //blit the double buffer
         vsync();
